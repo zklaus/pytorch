@@ -173,7 +173,7 @@ class ElementwiseUnaryPythonRefInfo(UnaryUfuncInfo):
         self.validate_view_consistency = validate_view_consistency
         assert isinstance(self.torch_opinfo, UnaryUfuncInfo)
 
-        inherited = self.torch_opinfo._original_unary_ufunc_args
+        inherited = self.torch_opinfo._original_opinfo_args
         ukwargs = _inherit_constructor_args(name, op, inherited, kwargs)
 
         super().__init__(**ukwargs)
@@ -201,7 +201,7 @@ class ElementwiseBinaryPythonRefInfo(BinaryUfuncInfo):
         )
         assert isinstance(self.torch_opinfo, BinaryUfuncInfo)
 
-        inherited = self.torch_opinfo._original_binary_ufunc_args
+        inherited = self.torch_opinfo._original_opinfo_args
         ukwargs = _inherit_constructor_args(name, op, inherited, kwargs)
 
         super().__init__(**ukwargs)

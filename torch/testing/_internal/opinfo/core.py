@@ -70,47 +70,28 @@ def _getattr_qual(obj, name, default=_NOTHING):
         else:
             raise
 
-
+@dataclass
 class DecorateInfo:
     """Describes which test, or type of tests, should be wrapped in the given
     decorators when testing an operator. Any test that matches all provided
     arguments will be decorated. The decorators will only be applied if the
     active_if argument is True."""
 
-    __slots__ = [
-        "decorators",
-        "cls_name",
-        "test_name",
-        "device_type",
-        "dtypes",
-        "active_if",
-    ]
+    decorators: list = field(default_factory=list)
+    cls_name: Optional[str] = None
+    test_name: Optional[str] = None
+    device_type: Optional[str] = None
+    dtypes: Optional[_dispatch_dtypes] = None
+    active_if: bool = True
 
-    def __init__(
-        self,
-        decorators,
-        cls_name=None,
-        test_name=None,
-        *,
-        device_type=None,
-        dtypes=None,
-        active_if=True,
-    ):
-        self.decorators = (
-            list(decorators)
-            if isinstance(decorators, collections.abc.Sequence)
-            else [decorators]
-        )
-        self.cls_name = cls_name
-        self.test_name = test_name
-        self.device_type = device_type
-        self.dtypes = dtypes
-        self.active_if = active_if
-
+    def __post_init__(self):
         # Validate dtypes
         if self.dtypes is not None:
             for dtype in self.dtypes:
                 assert isinstance(dtype, torch.dtype)
+        
+        if not isinstance(self.decorators, list):
+            self.decorators = [self.decorators]
 
     def is_active(self, cls_name, test_name, device_type, dtype, param_kwargs):
         return (
@@ -2406,6 +2387,7 @@ def sample_inputs_elementwise_binary(op, device, dtype, requires_grad, **kwargs)
 
 # Metadata class for binary "universal functions (ufuncs)" that accept two
 # tensor and have common properties
+@dataclass
 class BinaryUfuncInfo(OpInfo):
     """Operator information for 'universal binary functions (binary ufuncs).'
     These are functions of two tensors with common properties like:
@@ -2419,24 +2401,18 @@ class BinaryUfuncInfo(OpInfo):
     about the concept of ufuncs.
     """
 
-    def __init__(
-        self,
-        name,
-        *,
-        sample_inputs_func=sample_inputs_elementwise_binary,
-        reference_inputs_func=reference_inputs_elementwise_binary,
-        sample_kwargs=lambda device, dtype, input: ({}, {}),
-        error_inputs_func=None,
-        lhs_make_tensor_kwargs=None,
-        rhs_make_tensor_kwargs=None,
-        always_returns_bool=False,  # Set to true if the op always returns bool tensors
-        supports_rhs_python_scalar=True,  # Whether the operator allows Tensor x scalar inputs
-        supports_one_python_scalar=False,  # Whether the operator allows scalar x tensor and tensor x scalar inputs
-        supports_two_python_scalars=False,  # Whether the operator allows scalar x scalar inputs
-        **kwargs,
-    ):
-        self._original_binary_ufunc_args = locals().copy()
+    sample_inputs_func: Callable = sample_inputs_elementwise_binary
+    reference_inputs_func: Callable = reference_inputs_elementwise_binary
+    sample_kwargs: Callable = lambda device, dtype, input: ({}, {})
+    lhs_make_tensor_kwargs: dict = field(default_factory=dict)
+    rhs_make_tensor_kwargs: dict = field(default_factory=dict)
+    always_returns_bool: bool = False
+    supports_rhs_python_scalar: bool = True
+    supports_one_python_scalar: bool = False
+    supports_two_python_scalars: bool = False
 
+    def __post_init__(self):
+        super().__post_init__()
         # Elementwise binary operations perform the equivalent of test_numpy_refs
         #   in test_binary_ufuncs, but with additional test granularity. So the
         #   generic test_ops.py test is skipped because it's redundant.
@@ -2447,37 +2423,14 @@ class BinaryUfuncInfo(OpInfo):
                 "test_numpy_refs",
             ),
         )
-        kwargs["skips"] = kwargs.get("skips", ()) + common_skips
-        super().__init__(
-            name,
-            sample_inputs_func=sample_inputs_func,
-            reference_inputs_func=reference_inputs_func,
-            error_inputs_func=make_error_inputs_elementwise_binary(error_inputs_func),
-            **kwargs,
-        )
-
-        self.sample_kwargs = sample_kwargs
-
-        # [lr]hs_make_tensor_kwargs are part of the OpInfo to be able to dynamically generate valid samples later on.
-        if lhs_make_tensor_kwargs is None:
-            lhs_make_tensor_kwargs = {}
-        self.lhs_make_tensor_kwargs = lhs_make_tensor_kwargs
-
-        if rhs_make_tensor_kwargs is None:
-            rhs_make_tensor_kwargs = {}
-        self.rhs_make_tensor_kwargs = rhs_make_tensor_kwargs
-
-        self.always_returns_bool = always_returns_bool
-        self.supports_rhs_python_scalar = supports_rhs_python_scalar
-        self.supports_one_python_scalar = supports_one_python_scalar
-        self.supports_two_python_scalars = supports_two_python_scalars
+        self.skips += common_skips
 
         if self.supports_two_python_scalars:
             self.supports_one_python_scalar = True
 
         if self.supports_one_python_scalar:
             assert (
-                supports_rhs_python_scalar
+                self.supports_rhs_python_scalar
             ), "Can't support lhs and rhs Python scalars but not rhs scalars!"
 
 
@@ -2757,6 +2710,7 @@ def reference_inputs_elementwise_unary(op, device, dtype, requires_grad, **kwarg
 
 # Metadata class for unary "universal functions (ufuncs)" that accept a single
 # tensor and have common properties like:
+@dataclass
 class UnaryUfuncInfo(OpInfo):
     """Operator information for 'universal unary functions (unary ufuncs).'
     These are functions of a single tensor with common properties like:
@@ -2770,46 +2724,18 @@ class UnaryUfuncInfo(OpInfo):
     about the concept of ufuncs.
     """
 
-    def __init__(
-        self,
-        name,  # the string name of the function
-        *,
-        dtypes=floating_types(),
-        domain=(None, None),  # the [low, high) domain of the function
-        handles_complex_extremal_values=True,  # whether the op correctly handles extremal values (like nan/inf)
-        handles_large_floats=True,  # whether the op correctly handles large float values (like 1e20)
-        supports_complex_to_float=False,  # op supports casting from complex input to real output safely eg. angle
-        sample_inputs_func=sample_inputs_elementwise_unary,
-        reference_inputs_func=reference_inputs_elementwise_unary,
-        sample_kwargs=lambda device, dtype, input: ({}, {}),
-        reference_numerics_filter=None,  # Filters values in the range of the domain specified above but that should not be tested
-        **kwargs,
-    ):
-        self._original_unary_ufunc_args = locals().copy()
+    dtypes: _dispatch_dtypes = floating_types()
+    sample_inputs_func: Callable = sample_inputs_elementwise_unary
+    reference_inputs_func: Callable = reference_inputs_elementwise_unary
+    sample_kwargs: Callable = lambda device, dtype, input: ({}, {})
+    domain: tuple[Optional[float], Optional[float]] = (None, None)
+    handles_complex_extremal_values: bool = True
+    handles_large_floats: bool = True
+    supports_complex_to_float: bool = False
+    reference_numerics_filter: NumericsFilter = None
 
-        super().__init__(
-            name,
-            dtypes=dtypes,
-            sample_inputs_func=sample_inputs_func,
-            reference_inputs_func=reference_inputs_func,
-            **kwargs,
-        )
-        self.domain = domain
-        self.handles_complex_extremal_values = handles_complex_extremal_values
-        self.handles_large_floats = handles_large_floats
-        self.supports_complex_to_float = supports_complex_to_float
-        self.reference_numerics_filter = reference_numerics_filter
-
-        # test_unary_ufuncs.py generates its own inputs to test the consistency
-        # of the operator on sliced tensors, non-contig tensors, etc.
-        # `sample_kwargs` is a utility function to provide kwargs
-        # along with those inputs if required (eg. clamp).
-        # It should return two dictionaries, first holding kwarg for
-        # torch operator and second one for reference NumPy operator.
-        self.sample_kwargs = sample_kwargs
-
-        # Epsilon to ensure grad and gradgrad checks don't test values
-        #   outside a function's domain.
+    def __post_init__(self):
+        super().__post_init__()
         self._domain_eps = 1e-5
 
 
