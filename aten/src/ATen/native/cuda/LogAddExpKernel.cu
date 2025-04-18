@@ -23,14 +23,25 @@ void logaddexp_kernel_cuda(TensorIteratorBase& iter) {
           gpu_kernel(iter, [] GPU_LAMBDA (scalar_t a_, scalar_t b_) -> scalar_t {
             const auto a = static_cast<opmath_t>(a_);
             const auto b = static_cast<opmath_t>(b_);
-            if (::isinf(a.real()) && a == b) {
-              return a;
+            opmath_t min_;
+            opmath_t max_;
+            if (a.real() >= b.real()) {
+              min_ = b;
+              max_ = a;
             } else {
-              if (a.real() >= b.real()) {
-                return a + ::log1p(::exp(b - a));
+              min_ = a;
+              max_ = b;
+            } 
+            if (::isinf(a.real()) && a == b) {
+              if (min_.real() < 0) {
+                return min_;
               } else {
-                return b + ::log1p(::exp(a - b));
+                return ::log(::exp(min_) + ::exp(max_));
               }
+            } else if (::isnan(min_.real()) || ::isnan(min_.imag())) {
+                return opmath_t(NAN, NAN);
+            } else {
+                return max_ + ::log1p(::exp(min_ - max_));
             }
           });
         });
