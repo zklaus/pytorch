@@ -1192,9 +1192,9 @@ build_update_message = """
     To install:
       $ python -m pip install --no-build-isolation -v .
     To develop locally:
-      $ python -m pip install --no-build-isolation -v -e .
+      $ python -m pip install -e . -v --no-build-isolation
     To force cmake to re-generate native build files (off by default):
-      $ CMAKE_FRESH=1 python -m pip install --no-build-isolation -v -e .
+      $ CMAKE_FRESH=1 python -m pip install -e . -v --no-build-isolation
 """
 
 

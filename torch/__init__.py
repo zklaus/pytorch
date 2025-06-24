@@ -1028,7 +1028,7 @@ except ImportError:
                         $ python -m pip install --no-build-isolation -v . && python -c "import torch"
 
                     This error can generally be solved using the `develop` workflow
-                        $ python -m pip install --no-build-isolation -v -e . && python -c "import torch"  # This should succeed
+                        $ python -m pip install -e . -v --no-build-isolation && python -c "import torch"  # This should succeed
                     or by running Python from a different directory.
                 """
             ).strip()

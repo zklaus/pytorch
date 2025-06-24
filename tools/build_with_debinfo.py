@@ -95,8 +95,7 @@ def main() -> None:
         sys.exit(-95)
     if not is_devel_setup():
         print(
-            "Not a devel setup of PyTorch, "
-            "please run `python -m pip install --no-build-isolation -v -e .` first"
+            "Not a devel setup of PyTorch, please run `python -m pip install -e . -v --no-build-isolation` first"
         )
         sys.exit(-1)
     if not has_build_ninja():
