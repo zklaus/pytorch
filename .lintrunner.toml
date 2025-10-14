@@ -1098,6 +1098,7 @@ include_patterns = [
 exclude_patterns = [
     # We don't care too much about files in this directory, don't enforce
     # spelling on them
+    'pixi.lock',
     'caffe2/**',
     'fb/**',
     '**/fb/**',
