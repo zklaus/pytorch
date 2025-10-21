@@ -29,10 +29,9 @@ python = ">=3.11"
 spin = "*"
 
 [feature.lintrunner.tasks]
-lintrunner-init = "lintrunner init"
-lint = "lintrunner --all-files"
-quicklint = "lintrunner"
-quickfix = "lintrunner --apply-patches"
+lint = "spin lint"
+quicklint = "spin quicklint"
+quickfix = "spin quickfix"
 
 [feature.regenerate.dependencies]
 typing-extensions = ">=4.8.0"
