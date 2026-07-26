@@ -1,0 +1,551 @@
+{
+  "version": 7,
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "description": "DRAFT, not yet used by any CI job. Mirrors what CI/CD sets via environment variables today; see agent_space/ci-preset-inventory.md for the mapping. Sets neither generator nor binaryDir on purpose: scikit-build-core supplies -B and resolves the generator without reading presets, so either would desync its build-type handling. Entries in environment blocks are variables whose CMake consumers still read $ENV{} rather than a cache variable; they move to cacheVariables once fixed. This preset is otherwise empty so a leaf is the only thing constraining a build."
+    },
+    {
+      "name": "ci",
+      "hidden": true,
+      "inherits": "base",
+      "description": "Context mixin: pull/trunk CI builds. WERROR is NOT here: Linux and macOS CI set it, Windows CI does not, so it sits on the leaves that actually want it."
+    },
+    {
+      "name": "cd",
+      "hidden": true,
+      "inherits": "base",
+      "description": "Context mixin: binary/nightly CD builds.",
+      "cacheVariables": {
+        "BUILD_TEST": "OFF",
+        "INSTALL_TEST": "0",
+        "USE_FBGEMM": "1",
+        "USE_GLOO_WITH_OPENSSL": "OFF"
+      },
+      "environment": {
+        "TH_BINARY_BUILD": "1"
+      }
+    },
+    {
+      "name": "cpu",
+      "hidden": true,
+      "inherits": "base",
+      "description": "Variant mixin: CPU-only. Linux pull CI never sets this today and relies on the image lacking CUDA.",
+      "cacheVariables": {
+        "USE_CUDA": "0"
+      }
+    },
+    {
+      "name": "cuda",
+      "hidden": true,
+      "inherits": "base",
+      "description": "Variant mixin: CUDA. Only what is genuinely platform-neutral -- Windows CD sets nothing beyond this plus an arch list.",
+      "cacheVariables": {
+        "USE_CUDA": "1"
+      }
+    },
+    {
+      "name": "cuda-linux-cd",
+      "hidden": true,
+      "inherits": "cuda",
+      "description": "The Linux CD CUDA block (CUDA_BUILD_ENV_STATIC in .ci/manywheel/build_env_setup.py). Hardcodes /usr/local/cuda paths, so it must not reach Windows leaves.",
+      "cacheVariables": {
+        "USE_CUPTI_SO": "1",
+        "USE_SYSTEM_NCCL": "1",
+        "USE_STATIC_CUDNN": "0",
+        "USE_STATIC_NCCL": "0",
+        "USE_CUDA_STATIC_LINK": "0",
+        "USE_CUSPARSELT": "1",
+        "USE_CUFILE": "1"
+      },
+      "environment": {
+        "ATEN_STATIC_CUDA": "0",
+        "NCCL_ROOT_DIR": "/usr/local/cuda",
+        "CUDNN_ROOT_DIR": "/usr/local/cuda",
+        "NCCL_INCLUDE_DIR": "/usr/local/cuda/include/",
+        "NCCL_LIB_DIR": "/usr/local/cuda/lib64/"
+      }
+    },
+    {
+      "name": "rocm",
+      "hidden": true,
+      "inherits": "base",
+      "description": "Variant mixin: ROCm. USE_CUDA is deliberately not set, matching current CI. PYTORCH_ROCM_ARCH comes from the builder image and cannot be pinned here.",
+      "cacheVariables": {
+        "USE_MKLDNN": "0",
+        "USE_STATIC_CUDNN": "1",
+        "USE_STATIC_NCCL": "1",
+        "USE_CUDA_STATIC_LINK": "1",
+        "BUILD_DEBUG_INFO": "0",
+        "FORCE_RPATH": "--force-rpath"
+      },
+      "environment": {
+        "ATEN_STATIC_CUDA": "1",
+        "ROCM_HOME": "/opt/rocm",
+        "MAGMA_HOME": "/opt/rocm/magma"
+      }
+    },
+    {
+      "name": "xpu",
+      "hidden": true,
+      "inherits": "base",
+      "description": "Variant mixin: XPU. The oneAPI vars.sh environment diff is runtime-captured and cannot live here.",
+      "cacheVariables": {
+        "USE_CUDA": "0",
+        "USE_STATIC_MKL": "1",
+        "USE_ONEMKL": "1",
+        "USE_XCCL": "1",
+        "USE_MPI": "0"
+      }
+    },
+    {
+      "name": "linux",
+      "hidden": true,
+      "inherits": "base",
+      "description": "Platform mixin: Linux x86_64. MKL paths are probed on /opt/intel existing.",
+      "cacheVariables": {
+        "CMAKE_INCLUDE_PATH": "/opt/intel/include",
+        "CMAKE_LIBRARY_PATH": "/opt/intel/lib:/lib"
+      }
+    },
+    {
+      "name": "linux-aarch64",
+      "hidden": true,
+      "inherits": "base",
+      "description": "Platform mixin: Linux aarch64. No MKL paths; gold linker forced off.",
+      "cacheVariables": {
+        "USE_MKLDNN": "1",
+        "USE_MKLDNN_ACL": "1",
+        "USE_GOLD_LINKER": "OFF"
+      },
+      "environment": {
+        "ACL_ROOT_DIR": "/acl"
+      }
+    },
+    {
+      "name": "linux-s390x",
+      "hidden": true,
+      "inherits": "base",
+      "description": "Platform mixin: Linux s390x, the only user of the legacy .ci/manywheel shell path.",
+      "cacheVariables": {
+        "USE_NCCL": "1",
+        "USE_RCCL": "1",
+        "USE_KINETO": "1",
+        "BUILD_LIBTORCH_CPU_WITH_DEBUG": "0",
+        "CMAKE_INCLUDE_PATH": "/opt/intel/include",
+        "CMAKE_LIBRARY_PATH": "/opt/intel/lib:/lib"
+      }
+    },
+    {
+      "name": "windows",
+      "hidden": true,
+      "inherits": "base",
+      "description": "Platform mixin: Windows x64. Generator and CC/CXX come from pyproject.toml, not from here."
+    },
+    {
+      "name": "windows-arm64",
+      "hidden": true,
+      "inherits": "base",
+      "description": "Platform mixin: Windows arm64. BLAS is selected by the bootstrap scripts via ENABLE_APL/ENABLE_OPENBLAS; APL is the CI default.",
+      "cacheVariables": {
+        "INSTALL_TEST": "0",
+        "CMAKE_C_COMPILER_LAUNCHER": "sccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "sccache",
+        "BLAS": "APL"
+      }
+    },
+    {
+      "name": "macos-arm64",
+      "hidden": true,
+      "inherits": "base",
+      "description": "Platform mixin: macOS arm64.",
+      "cacheVariables": {
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "14.0"
+      }
+    },
+    {
+      "name": "linux-cd-cpu",
+      "inherits": [
+        "cpu",
+        "cd",
+        "linux"
+      ],
+      "description": "manywheel linux cpu (DESIRED_CUDA=cpu). Also covers cpu-cxx11-abi, which has no distinguishing build config.",
+      "cacheVariables": {
+        "USE_GOLD_LINKER": "ON"
+      }
+    },
+    {
+      "name": "linux-cd-cpu-aarch64",
+      "inherits": [
+        "cpu",
+        "cd",
+        "linux-aarch64"
+      ],
+      "description": "manywheel linux cpu-aarch64.",
+      "cacheVariables": {
+        "BLAS": "OpenBLAS"
+      },
+      "environment": {
+        "OpenBLAS_HOME": "/opt/OpenBLAS"
+      }
+    },
+    {
+      "name": "linux-cd-cpu-s390x",
+      "inherits": [
+        "cpu",
+        "cd",
+        "linux-s390x"
+      ],
+      "description": "manywheel linux cpu-s390x. Gold linker is ON here because DESIRED_CUDA=cpu and the aarch64 override does not apply.",
+      "cacheVariables": {
+        "USE_GOLD_LINKER": "ON"
+      }
+    },
+    {
+      "name": "linux-cd-cuda-12_6",
+      "inherits": [
+        "cuda-linux-cd",
+        "cd",
+        "linux"
+      ],
+      "description": "manywheel linux cu126.",
+      "cacheVariables": {
+        "TORCH_CUDA_ARCH_LIST": "5.0;6.0;7.0;7.5;8.0;8.6;9.0"
+      },
+      "environment": {
+        "TORCH_NVCC_FLAGS": "-Xfatbin -compress-all --threads 2"
+      }
+    },
+    {
+      "name": "linux-cd-cuda-13_0",
+      "inherits": [
+        "cuda-linux-cd",
+        "cd",
+        "linux"
+      ],
+      "description": "manywheel linux cu130. Nightly builds append +PTX to the 12.0 entry; that is version-dependent and stays dynamic.",
+      "cacheVariables": {
+        "TORCH_CUDA_ARCH_LIST": "7.5;8.0;8.6;9.0;10.0;12.0"
+      },
+      "environment": {
+        "TORCH_NVCC_FLAGS": "-Xfatbin -compress-all --threads 2 -compress-mode=size"
+      }
+    },
+    {
+      "name": "linux-cd-cuda-13_2",
+      "inherits": "linux-cd-cuda-13_0",
+      "description": "manywheel linux cu132. Identical build config to cu130."
+    },
+    {
+      "name": "linux-cd-cuda-12_6-aarch64",
+      "inherits": [
+        "cuda-linux-cd",
+        "cd",
+        "linux-aarch64"
+      ],
+      "description": "manywheel linux cuda-aarch64 cu126.",
+      "cacheVariables": {
+        "TORCH_CUDA_ARCH_LIST": "8.0;9.0",
+        "BLAS": "NVPL",
+        "USE_MAGMA": "0"
+      },
+      "environment": {
+        "TORCH_NVCC_FLAGS": "-Xfatbin -compress-all --threads 2"
+      }
+    },
+    {
+      "name": "linux-cd-cuda-13_0-aarch64",
+      "inherits": [
+        "cuda-linux-cd",
+        "cd",
+        "linux-aarch64"
+      ],
+      "description": "manywheel linux cuda-aarch64 cu130.",
+      "cacheVariables": {
+        "TORCH_CUDA_ARCH_LIST": "8.0;9.0;10.0;11.0;12.0",
+        "BLAS": "NVPL",
+        "USE_MAGMA": "0"
+      },
+      "environment": {
+        "TORCH_NVCC_FLAGS": "-Xfatbin -compress-all --threads 2 -compress-mode=size"
+      }
+    },
+    {
+      "name": "linux-cd-cuda-13_2-aarch64",
+      "inherits": "linux-cd-cuda-13_0-aarch64",
+      "description": "manywheel linux cuda-aarch64 cu132. Identical build config to cu130-aarch64."
+    },
+    {
+      "name": "linux-cd-rocm-7_1",
+      "inherits": [
+        "rocm",
+        "cd",
+        "linux"
+      ],
+      "description": "manywheel linux rocm7.1. PYTORCH_ROCM_ARCH is supplied by the builder image."
+    },
+    {
+      "name": "linux-cd-rocm-7_2",
+      "inherits": [
+        "rocm",
+        "cd",
+        "linux"
+      ],
+      "description": "manywheel linux rocm7.2. PYTORCH_ROCM_ARCH is supplied by the builder image."
+    },
+    {
+      "name": "linux-cd-xpu",
+      "inherits": [
+        "xpu",
+        "cd",
+        "linux"
+      ],
+      "description": "manywheel linux xpu. No arch-list restriction, unlike pull CI."
+    },
+    {
+      "name": "windows-cd-cpu",
+      "inherits": [
+        "cpu",
+        "cd",
+        "windows"
+      ],
+      "description": "windows binary wheel cpu. sccache is wired as CC/CXX=sccache-cl outside the preset.",
+      "cacheVariables": {
+        "USE_GOLD_LINKER": "ON"
+      }
+    },
+    {
+      "name": "windows-cd-cuda-12_6",
+      "inherits": [
+        "cuda",
+        "cd",
+        "windows"
+      ],
+      "description": "windows binary wheel cu126.",
+      "cacheVariables": {
+        "TORCH_CUDA_ARCH_LIST": "5.0;6.0;6.1;7.0;7.5;8.0;8.6;9.0"
+      },
+      "environment": {
+        "TORCH_NVCC_FLAGS": "-Xfatbin -compress-all"
+      }
+    },
+    {
+      "name": "windows-cd-cuda-13_0",
+      "inherits": [
+        "cuda",
+        "cd",
+        "windows"
+      ],
+      "description": "windows binary wheel cu130.",
+      "cacheVariables": {
+        "TORCH_CUDA_ARCH_LIST": "7.5;8.0;8.6;9.0;10.0;12.0"
+      },
+      "environment": {
+        "TORCH_NVCC_FLAGS": "-Xfatbin -compress-all"
+      }
+    },
+    {
+      "name": "windows-cd-cuda-13_2",
+      "inherits": "windows-cd-cuda-13_0",
+      "description": "windows binary wheel cu132. Identical build config to cu130."
+    },
+    {
+      "name": "windows-cd-xpu",
+      "inherits": [
+        "xpu",
+        "cd",
+        "windows"
+      ],
+      "description": "windows binary wheel xpu. No sccache on this path."
+    },
+    {
+      "name": "windows-arm64-cd-cpu",
+      "inherits": [
+        "cpu",
+        "cd",
+        "windows-arm64"
+      ],
+      "description": "windows arm64 binary wheel. Note the script sets CMAKE_BUILD_TYPE from an unset BUILD_TYPE today, so Release is reached by accident.",
+      "cacheVariables": {
+        "USE_GOLD_LINKER": "ON"
+      }
+    },
+    {
+      "name": "macos-arm64-cd-cpu",
+      "inherits": [
+        "cpu",
+        "cd",
+        "macos-arm64"
+      ],
+      "description": "macOS arm64 binary wheel. No sccache on this path.",
+      "cacheVariables": {
+        "USE_DISTRIBUTED": "1",
+        "USE_MKLDNN": "OFF",
+        "USE_PYTORCH_METAL_EXPORT": "1",
+        "USE_COREML_DELEGATE": "1",
+        "USE_GOLD_LINKER": "ON"
+      },
+      "environment": {
+        "OMP_PREFIX": "/opt/llvm-openmp"
+      }
+    },
+    {
+      "name": "linux-ci-cpu",
+      "inherits": [
+        "cpu",
+        "ci",
+        "linux"
+      ],
+      "description": "pull/trunk linux CPU build.",
+      "cacheVariables": {
+        "USE_MKLDNN": "1",
+        "BUILD_STATIC_RUNTIME_BENCHMARK": "ON",
+        "WERROR": "1"
+      }
+    },
+    {
+      "name": "linux-ci-cuda",
+      "inherits": [
+        "cuda",
+        "ci",
+        "linux"
+      ],
+      "description": "pull/trunk linux CUDA build. TORCH_CUDA_ARCH_LIST is per-job (workflow input, default 7.5) so it is deliberately not pinned here.",
+      "cacheVariables": {
+        "USE_MKLDNN": "1",
+        "WERROR": "1"
+      }
+    },
+    {
+      "name": "linux-ci-aarch64",
+      "inherits": [
+        "cpu",
+        "ci",
+        "linux-aarch64"
+      ],
+      "description": "pull/trunk linux aarch64 build. Unlike CD, BLAS is auto-detected.",
+      "cacheVariables": {
+        "BUILD_STATIC_RUNTIME_BENCHMARK": "ON",
+        "WERROR": "1"
+      }
+    },
+    {
+      "name": "linux-ci-rocm",
+      "inherits": [
+        "rocm",
+        "ci",
+        "linux"
+      ],
+      "description": "pull/trunk linux ROCm build. CI appends ;gfx1033 to the image's PYTORCH_ROCM_ARCH, which stays dynamic.",
+      "cacheVariables": {
+        "BUILD_STATIC_RUNTIME_BENCHMARK": "ON"
+      }
+    },
+    {
+      "name": "linux-ci-xpu",
+      "inherits": [
+        "xpu",
+        "ci",
+        "linux"
+      ],
+      "description": "pull/trunk linux XPU build (pvc). The *client* jobs use bmg instead.",
+      "cacheVariables": {
+        "TORCH_XPU_ARCH_LIST": "pvc",
+        "BUILD_STATIC_RUNTIME_BENCHMARK": "ON"
+      }
+    },
+    {
+      "name": "linux-ci-xpu-client",
+      "inherits": "linux-ci-xpu",
+      "description": "pull/trunk linux XPU client build.",
+      "cacheVariables": {
+        "TORCH_XPU_ARCH_LIST": "bmg"
+      }
+    },
+    {
+      "name": "windows-ci-cpu",
+      "inherits": [
+        "cpu",
+        "ci",
+        "windows"
+      ],
+      "description": "pull/trunk windows CPU build. WERROR is not set on Windows CI.",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER_LAUNCHER": "sccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "sccache"
+      }
+    },
+    {
+      "name": "windows-ci-cuda",
+      "inherits": [
+        "cuda",
+        "ci",
+        "windows"
+      ],
+      "description": "pull/trunk windows CUDA build. The nvcc launcher chain (randomtemp + sccache) is runtime-pathed and stays outside the preset.",
+      "cacheVariables": {
+        "TORCH_CUDA_ARCH_LIST": "8.6",
+        "CMAKE_C_COMPILER_LAUNCHER": "sccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "sccache"
+      }
+    },
+    {
+      "name": "windows-ci-xpu",
+      "inherits": [
+        "xpu",
+        "ci",
+        "windows"
+      ],
+      "description": "pull/trunk windows XPU build.",
+      "cacheVariables": {
+        "TORCH_XPU_ARCH_LIST": "bmg",
+        "CMAKE_C_COMPILER_LAUNCHER": "sccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "sccache"
+      }
+    },
+    {
+      "name": "windows-arm64-ci",
+      "inherits": [
+        "cpu",
+        "ci",
+        "windows-arm64"
+      ],
+      "description": "pull/trunk windows arm64 build. CMAKE_POLICY_VERSION_MINIMUM is set only on this path.",
+      "cacheVariables": {
+        "CMAKE_POLICY_VERSION_MINIMUM": "3.5"
+      }
+    },
+    {
+      "name": "macos-arm64-ci",
+      "inherits": [
+        "cpu",
+        "ci",
+        "macos-arm64"
+      ],
+      "description": "pull/trunk macOS arm64 build. Sets USE_PYTORCH_METAL (documented as the iOS flag) where CD sets USE_PYTORCH_METAL_EXPORT; see inventory divergence 3.",
+      "cacheVariables": {
+        "USE_DISTRIBUTED": "0",
+        "BUILD_TEST": "OFF",
+        "USE_OPENMP": "1",
+        "USE_PYTORCH_METAL": "1",
+        "WERROR": "1"
+      }
+    },
+    {
+      "name": "macos-arm64-ci-distributed",
+      "inherits": [
+        "cpu",
+        "ci",
+        "macos-arm64"
+      ],
+      "description": "pull/trunk macOS arm64 distributed build (inductor-perf-test-nightly-macos).",
+      "cacheVariables": {
+        "USE_DISTRIBUTED": "1",
+        "USE_OPENMP": "1",
+        "WERROR": "1"
+      }
+    }
+  ]
+}
